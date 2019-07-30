@@ -3,6 +3,7 @@ package core
 type (
 	MsgType   string
 	EventType string
+	InfoType  string
 )
 
 // 微信服务器推送过来的消息(事件)的通用消息头.
@@ -11,6 +12,19 @@ type MsgHeader struct {
 	FromUserName string  `xml:"FromUserName" json:"FromUserName"`
 	CreateTime   int64   `xml:"CreateTime"   json:"CreateTime"`
 	MsgType      MsgType `xml:"MsgType"      json:"MsgType"`
+}
+
+type MixedServiceProviderMsg struct {
+	XMLName struct{} `xml:"xml" json:"-"`
+	MsgHeader
+	AppId                        string   `xml:"AppId,omitempty" json:"AppId,omitempty"`
+	CreateTime                   int64    `xml:"CreateTime,omitempty" json:"CreateTime,omitempty"`
+	InfoType                     InfoType `xml:"InfoType,omitempty" json:"InfoType,omitempty"`
+	AuthorizerAppid              string   `xml:"AuthorizerAppid,omitempty" json:"AuthorizerAppid,omitempty"`
+	AuthorizationCode            string   `xml:"AuthorizationCode,omitempty" json:"AuthorizationCode,omitempty"`
+	AuthorizationCodeExpiredTime string   `xml:"AuthorizationCodeExpiredTime,omitempty" json:"AuthorizationCodeExpiredTime,omitempty"`
+	PreAuthCode                  string   `xml:"PreAuthCode,omitempty" json:"PreAuthCode,omitempty"`
+	ComponentVerifyTicket        string   `xml:"ComponentVerifyTicket,omitempty" json:"ComponentVerifyTicket,omitempty"` // request
 }
 
 // 微信服务器推送过来的消息(事件)的合集.
@@ -59,15 +73,15 @@ type MixedMsg struct {
 		PoiName   string  `xml:"Poiname"    json:"Poiname"`
 	} `xml:"SendLocationInfo,omitempty" json:"SendLocationInfo,omitempty"`
 
-	MsgID    int64  `xml:"MsgID"  json:"MsgID"`  // template, mass
-	Status   string `xml:"Status" json:"Status"` // template, mass
-	*mass           // mass
-	*account        // account
-	*dkf            // dkf
-	*poi            // poi
-	*card           // card
-	*bizwifi        // bizwifi
-	*file           // MsgType is file
+	MsgID  int64  `xml:"MsgID"  json:"MsgID"`  // template, mass
+	Status string `xml:"Status" json:"Status"` // template, mass
+	*mass                                      // mass
+	*account                                   // account
+	*dkf                                       // dkf
+	*poi                                       // poi
+	*card                                      // card
+	*bizwifi                                   // bizwifi
+	*file                                      // MsgType is file
 
 	// shakearound
 	ChosenBeacon *struct {
