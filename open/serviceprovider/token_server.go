@@ -509,6 +509,9 @@ func (srv *DefaultComponentAccessTokenServer) Ticket() (ticket string, err error
 // https://developers.weixin.qq.com/doc/oplatform/Third-party_Platforms/api/pre_auth_code.html
 func (srv *DefaultComponentAccessTokenServer) PreAuthCode() (code string, err error) {
 	token, err := srv.Token()
+	if err != nil {
+		return
+	}
 	urlStr := "https://api.weixin.qq.com/cgi-bin/component/api_create_preauthcode?component_access_token=" + token
 	vals := url.Values{}
 	vals.Add("component_access_token", token)
