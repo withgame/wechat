@@ -3,6 +3,7 @@ package serviceprovider
 import (
 	"bytes"
 	"encoding/base64"
+	"encoding/json"
 	"encoding/xml"
 	"errors"
 	"fmt"
@@ -99,8 +100,8 @@ func NewDefaultComponentAccessTokenServer(componentAppId, componentAppSecret, to
 	}
 
 	srv = &DefaultComponentAccessTokenServer{
-		appId:                    url.QueryEscape(componentAppId),
-		appSecret:                url.QueryEscape(componentAppSecret),
+		appId:                    componentAppId,
+		appSecret:                componentAppSecret,
 		tokenBucketPtr:           unsafe.Pointer(&tokenBucket{currentToken: token}),
 		aesKeyBucketPtr:          unsafe.Pointer(&aesKeyBucket{currentAESKey: aesKey}),
 		httpClient:               httpClient,
@@ -513,31 +514,28 @@ func (srv *DefaultComponentAccessTokenServer) PreAuthCode() (code string, err er
 		return
 	}
 	urlStr := "https://api.weixin.qq.com/cgi-bin/component/api_create_preauthcode?component_access_token=" + token
-	vals := url.Values{}
-	vals.Add("component_access_token", token)
-	vals.Add("component_appid", srv.appId)
-	api.DebugPrintGetRequest(urlStr)
-	httpResp, err := srv.httpClient.PostForm(urlStr, vals)
+	vals := make(map[string]string, 0)
+	vals["component_access_token"] = token
+	vals["component_appid"] = srv.appId
+	valsBytArr, err := json.Marshal(vals)
 	if err != nil {
 		return
 	}
-	defer httpResp.Body.Close()
-	if httpResp.StatusCode != http.StatusOK {
-		err = fmt.Errorf("http.Status: %s", httpResp.Status)
-		return
-	}
+	api.DebugPrintGetRequest(urlStr)
 	var result struct {
 		Error
 		PreAuthCode string `json:"pre_auth_code,omitempty"`
 		ExpiresIn   int    `json:"expires_in,omitempty"`
 	}
-	if err = api.DecodeJSONHttpResponse(httpResp.Body, &result); err != nil {
+	err = httpPostJSON(srv.httpClient, urlStr, valsBytArr, &result)
+	if err != nil {
 		return
 	}
 	if result.ErrCode != ErrCodeOK {
 		err = &result.Error
 		return
 	}
+	code = result.PreAuthCode
 	return
 }
 
@@ -611,27 +609,22 @@ func (srv *DefaultComponentAccessTokenServer) updateToken(currentToken string) (
 	if err != nil {
 		return
 	}
-	url := "https://api.weixin.qq.com/cgi-bin/component/api_component_token?component_appid=" + srv.appId +
-		"&component_appsecret=" + srv.appSecret + "&component_verify_ticket=" + verifyTicket
-	api.DebugPrintGetRequest(url)
-	httpResp, err := srv.httpClient.Get(url)
+	urlStr := "https://api.weixin.qq.com/cgi-bin/component/api_component_token"
+	api.DebugPrintGetRequest(urlStr)
+	vals := make(map[string]string, 0)
+	vals["component_appid"] = srv.appId
+	vals["component_appsecret"] = srv.appSecret
+	vals["component_verify_ticket"] = verifyTicket
+	valByteArr, err := json.Marshal(vals)
 	if err != nil {
-		atomic.StorePointer(&srv.tokenCache, nil)
 		return
 	}
-	defer httpResp.Body.Close()
-
-	if httpResp.StatusCode != http.StatusOK {
-		atomic.StorePointer(&srv.tokenCache, nil)
-		err = fmt.Errorf("http.Status: %s", httpResp.Status)
-		return
-	}
-
 	var result struct {
 		Error
 		accessToken
 	}
-	if err = api.DecodeJSONHttpResponse(httpResp.Body, &result); err != nil {
+	err = httpPostJSON(srv.httpClient, urlStr, valByteArr, &result)
+	if err != nil {
 		atomic.StorePointer(&srv.tokenCache, nil)
 		return
 	}
