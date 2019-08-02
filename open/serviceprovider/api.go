@@ -270,14 +270,14 @@ func (clt *Client) ModifyDomain(authorizerAccessToken, incompleteURL string, act
 	if len(incompleteURL) == 0 {
 		incompleteURL = "https://api.weixin.qq.com/wxa/modify_domain?access_token="
 	}
+	if len(domains["req"]) == 0 || len(domains["ws"]) == 0 || len(domains["upload"]) == 0 || len(domains["download"]) == 0 {
+		err = errors.New("missing required params")
+		return
+	}
 	ErrorStructValue, ErrorErrCodeValue := checkResponse(response)
 	httpClient := clt.HttpClient
 	if httpClient == nil {
 		httpClient = util.DefaultHttpClient
-	}
-	if len(domains["req"]) == 0 || len(domains["ws"]) == 0 || len(domains["upload"]) == 0 || len(domains["download"]) == 0 {
-		err = errors.New("missing required params")
-		return
 	}
 	vals := make(map[string]interface{}, 0)
 	vals["action"] = string(action)
@@ -285,6 +285,46 @@ func (clt *Client) ModifyDomain(authorizerAccessToken, incompleteURL string, act
 	vals["wsrequestdomain"] = domains["ws"]
 	vals["uploaddomain"] = domains["upload"]
 	vals["downloaddomain"] = domains["download"]
+	valByte, err := json.Marshal(vals)
+	if err != nil {
+		return
+	}
+	finalURL := incompleteURL + url.QueryEscape(authorizerAccessToken)
+	if err = httpPostJSON(httpClient, finalURL, valByte, response); err != nil {
+		return
+	}
+	switch errCode := ErrorErrCodeValue.Int(); errCode {
+	case ErrCodeOK:
+		return
+	case ErrCodeInvalidCredential, ErrCodeAccessTokenExpired:
+		err = errors.New(ErrorStructValue.Field(errorErrMsgIndex).String())
+		return
+	default:
+		return
+	}
+}
+
+// 上传小程序代码
+// https://developers.weixin.qq.com/doc/oplatform/Third-party_Platforms/Mini_Programs/code/commit.html
+func (clt *Client) CodeSubmit(authorizerAccessToken, incompleteURL, templateId, extJson, userVersion, userDesc string) (err error) {
+	if len(incompleteURL) == 0 {
+		incompleteURL = "https://api.weixin.qq.com/wxa/commit?access_token="
+	}
+	if len(authorizerAccessToken) == 0 || len(templateId) == 0 || len(extJson) == 0 || len(userVersion) == 0 || len(userDesc) == 0 {
+		err = errors.New("missing required params")
+		return
+	}
+	var response interface{}
+	ErrorStructValue, ErrorErrCodeValue := checkResponse(response)
+	httpClient := clt.HttpClient
+	if httpClient == nil {
+		httpClient = util.DefaultHttpClient
+	}
+	vals := make(map[string]interface{}, 0)
+	vals["template_id"] = templateId
+	vals["ext_json"] = extJson
+	vals["user_version"] = userVersion
+	vals["user_desc"] = userDesc
 	valByte, err := json.Marshal(vals)
 	if err != nil {
 		return
