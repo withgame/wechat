@@ -9,7 +9,10 @@ import (
 	"net/url"
 )
 
-type AuthType int
+type (
+	AuthType   int
+	ActionType string
+)
 
 // https://developers.weixin.qq.com/doc/oplatform/Third-party_Platforms/Authorization_Process_Technical_Description.html
 const (
@@ -17,6 +20,14 @@ const (
 	AuthTypePhoneScan  AuthType = 1
 	AuthTypeOnlyMiniMP AuthType = 2
 	AuthTypeBoth       AuthType = 3
+)
+
+const (
+	ActionTypeNil ActionType = ""
+	ActionTypeAdd ActionType = "add"
+	ActionTypeDel ActionType = "delete"
+	ActionTypeSet ActionType = "set"
+	ActionTypeGet ActionType = "get"
 )
 
 // 获取授权方的帐号基本信息
@@ -248,6 +259,46 @@ RETRY:
 		}
 		retry.DebugPrintFallthrough(token)
 		fallthrough
+	default:
+		return
+	}
+}
+
+// 设置服务器域名
+// https://developers.weixin.qq.com/doc/oplatform/Third-party_Platforms/Mini_Programs/Server_Address_Configuration.html
+func (clt *Client) ModifyDomain(authorizerAccessToken, incompleteURL string, action ActionType, domains map[string][]string, response interface{}) (err error) {
+	if len(incompleteURL) == 0 {
+		incompleteURL = "https://api.weixin.qq.com/wxa/modify_domain?access_token="
+	}
+	ErrorStructValue, ErrorErrCodeValue := checkResponse(response)
+	httpClient := clt.HttpClient
+	if httpClient == nil {
+		httpClient = util.DefaultHttpClient
+	}
+	if len(domains["req"]) == 0 || len(domains["ws"]) == 0 || len(domains["upload"]) == 0 || len(domains["download"]) == 0 {
+		err = errors.New("missing required params")
+		return
+	}
+	vals := make(map[string]interface{}, 0)
+	vals["action"] = string(action)
+	vals["requestdomain"] = domains["req"]
+	vals["wsrequestdomain"] = domains["ws"]
+	vals["uploaddomain"] = domains["upload"]
+	vals["downloaddomain"] = domains["download"]
+	valByte, err := json.Marshal(vals)
+	if err != nil {
+		return
+	}
+	finalURL := incompleteURL + url.QueryEscape(authorizerAccessToken)
+	if err = httpPostJSON(httpClient, finalURL, valByte, response); err != nil {
+		return
+	}
+	switch errCode := ErrorErrCodeValue.Int(); errCode {
+	case ErrCodeOK:
+		return
+	case ErrCodeInvalidCredential, ErrCodeAccessTokenExpired:
+		err = errors.New(ErrorStructValue.Field(errorErrMsgIndex).String())
+		return
 	default:
 		return
 	}
