@@ -72,13 +72,14 @@ type DefaultComponentAccessTokenServer struct {
 //https://developers.weixin.qq.com/doc/oplatform/Third-party_Platforms/api/component_access_token.html
 
 // NewServer 创建一个新的 Server.
-//  componentAppId:可选; 公众号的AppId, 如果设置了值则安全模式时该Server只能处理 AppId 为该值的公众号的消息(事件);
-//  componentAppSecret: 必须; 公众号的componentAppSecret
-//  token:        必须; 公众号用于验证签名的token;
-//  base64AESKey: 可选; aes加密解密key, 43字节长(base64编码, 去掉了尾部的'='), 安全模式必须设置;
-//  handler:      必须; 处理微信服务器推送过来的消息(事件)的Handler;
+//  componentAppId:		必须; 平台型服务商的componentAppAppId;
+//  componentAppSecret: 必须; 平台型服务商的componentAppSecret;
+//  token:        		必须; 平台型服务商的用于验证签名的token;
+//  base64AESKey: 		可选; aes加密解密key, 43字节长(base64编码, 去掉了尾部的'='), 安全模式必须设置;
+//  httpClient:      	可选; http request client;
+//  options				可选; options[0]:true enable,false disabled tokenUpdateDaemon
 
-func NewDefaultComponentAccessTokenServer(componentAppId, componentAppSecret, token, base64AESKey string, httpClient *http.Client) (srv *DefaultComponentAccessTokenServer) {
+func NewDefaultComponentAccessTokenServer(componentAppId, componentAppSecret, token, base64AESKey string, httpClient *http.Client, options ...interface{}) (srv *DefaultComponentAccessTokenServer) {
 	if httpClient == nil {
 		httpClient = wechatUtil.DefaultHttpClient
 	}
@@ -86,8 +87,9 @@ func NewDefaultComponentAccessTokenServer(componentAppId, componentAppSecret, to
 		panic("empty token")
 	}
 	var (
-		aesKey []byte
-		err    error
+		aesKey                  []byte
+		err                     error
+		enableTokenUpdateDaemon bool = true
 	)
 	if base64AESKey != "" {
 		if len(base64AESKey) != 43 {
@@ -108,8 +110,14 @@ func NewDefaultComponentAccessTokenServer(componentAppId, componentAppSecret, to
 		refreshTokenRequestChan:  make(chan string),
 		refreshTokenResponseChan: make(chan refreshTokenResult),
 	}
-
-	go srv.tokenUpdateDaemon(time.Hour * 24 * time.Duration(100+rand.Int63n(200)))
+	if len(options) > 0 {
+		if val, ok := options[0].(bool); ok && val == false {
+			enableTokenUpdateDaemon = false
+		}
+	}
+	if enableTokenUpdateDaemon {
+		go srv.tokenUpdateDaemon(time.Hour * 24 * time.Duration(100+rand.Int63n(200)))
+	}
 	return
 }
 
