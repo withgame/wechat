@@ -52,8 +52,10 @@ type DefaultComponentAccessTokenServer struct {
 	appId     string
 	appSecret string
 
-	tokenBucketPtrMutex sync.Mutex     // used only by writers
-	tokenBucketPtr      unsafe.Pointer // *tokenBucket
+	enableRefreshToken bool
+
+	encodeTokenBucketPtrMutex sync.Mutex     // used only by writers
+	encodeTokenBucketPtr      unsafe.Pointer // *tokenBucket
 
 	aesKeyBucketPtrMutex sync.Mutex     // used only by writers
 	aesKeyBucketPtr      unsafe.Pointer // *aesKeyBucket
@@ -64,7 +66,9 @@ type DefaultComponentAccessTokenServer struct {
 	httpClient               *http.Client
 	refreshTokenRequestChan  chan string             // chan currentToken
 	refreshTokenResponseChan chan refreshTokenResult // chan {token, err}
-	tokenCache               unsafe.Pointer          // *accessToken
+
+	tokenCachePtrMutex sync.Mutex     // used only by writers
+	tokenCache         unsafe.Pointer // *accessToken
 }
 
 // NewDefaultComponentAccessTokenServer 创建一个新的 DefaultComponentAccessTokenServer, 如果 httpClient == nil 则默认使用 util.DefaultHttpClient.
@@ -74,16 +78,16 @@ type DefaultComponentAccessTokenServer struct {
 // NewServer 创建一个新的 Server.
 //  componentAppId:		必须; 平台型服务商的componentAppAppId;
 //  componentAppSecret: 必须; 平台型服务商的componentAppSecret;
-//  token:        		必须; 平台型服务商的用于验证签名的token;
+//  encodeToken:        必须; 平台型服务商的用于验证签名的encodeToken;
 //  base64AESKey: 		可选; aes加密解密key, 43字节长(base64编码, 去掉了尾部的'='), 安全模式必须设置;
 //  httpClient:      	可选; http request client;
 //  options				可选; options[0]:true enable,false disabled tokenUpdateDaemon
 
-func NewDefaultComponentAccessTokenServer(componentAppId, componentAppSecret, token, base64AESKey string, httpClient *http.Client, options ...interface{}) (srv *DefaultComponentAccessTokenServer) {
+func NewDefaultComponentAccessTokenServer(componentAppId, componentAppSecret, encodeToken, base64AESKey string, httpClient *http.Client, options ...interface{}) (srv *DefaultComponentAccessTokenServer) {
 	if httpClient == nil {
 		httpClient = wechatUtil.DefaultHttpClient
 	}
-	if token == "" {
+	if encodeToken == "" {
 		panic("empty token")
 	}
 	var (
@@ -100,21 +104,23 @@ func NewDefaultComponentAccessTokenServer(componentAppId, componentAppSecret, to
 			panic(fmt.Sprintf("Decode base64AESKey:%s failed", base64AESKey))
 		}
 	}
-
-	srv = &DefaultComponentAccessTokenServer{
-		appId:                    componentAppId,
-		appSecret:                componentAppSecret,
-		tokenBucketPtr:           unsafe.Pointer(&tokenBucket{currentToken: token}),
-		aesKeyBucketPtr:          unsafe.Pointer(&aesKeyBucket{currentAESKey: aesKey}),
-		httpClient:               httpClient,
-		refreshTokenRequestChan:  make(chan string),
-		refreshTokenResponseChan: make(chan refreshTokenResult),
-	}
 	if len(options) > 0 {
 		if val, ok := options[0].(bool); ok && val == false {
 			enableTokenUpdateDaemon = false
 		}
 	}
+
+	srv = &DefaultComponentAccessTokenServer{
+		appId:                    componentAppId,
+		appSecret:                componentAppSecret,
+		enableRefreshToken:       enableTokenUpdateDaemon,
+		encodeTokenBucketPtr:     unsafe.Pointer(&tokenBucket{currentToken: encodeToken}),
+		aesKeyBucketPtr:          unsafe.Pointer(&aesKeyBucket{currentAESKey: aesKey}),
+		httpClient:               httpClient,
+		refreshTokenRequestChan:  make(chan string),
+		refreshTokenResponseChan: make(chan refreshTokenResult),
+	}
+
 	if enableTokenUpdateDaemon {
 		go srv.tokenUpdateDaemon(time.Hour * 24 * time.Duration(100+rand.Int63n(200)))
 	}
@@ -165,22 +171,22 @@ func (srv *DefaultComponentAccessTokenServer) removeLastTicket(lastTicket string
 	return
 }
 
-func (srv *DefaultComponentAccessTokenServer) getToken() (currentToken, lastToken string) {
-	if p := (*tokenBucket)(atomic.LoadPointer(&srv.tokenBucketPtr)); p != nil {
+func (srv *DefaultComponentAccessTokenServer) getEncodeToken() (currentToken, lastToken string) {
+	if p := (*tokenBucket)(atomic.LoadPointer(&srv.encodeTokenBucketPtr)); p != nil {
 		return p.currentToken, p.lastToken
 	}
 	return
 }
 
-func (srv *DefaultComponentAccessTokenServer) SetToken(token string) (err error) {
+func (srv *DefaultComponentAccessTokenServer) SetEncodeToken(token string) (err error) {
 	if token == "" {
-		return errors.New("empty token")
+		return errors.New("empty encode token")
 	}
 
-	srv.tokenBucketPtrMutex.Lock()
-	defer srv.tokenBucketPtrMutex.Unlock()
+	srv.encodeTokenBucketPtrMutex.Lock()
+	defer srv.encodeTokenBucketPtrMutex.Unlock()
 
-	currentToken, _ := srv.getToken()
+	currentToken, _ := srv.getEncodeToken()
 	if token == currentToken {
 		return
 	}
@@ -189,23 +195,30 @@ func (srv *DefaultComponentAccessTokenServer) SetToken(token string) (err error)
 		currentToken: token,
 		lastToken:    currentToken,
 	}
-	atomic.StorePointer(&srv.tokenBucketPtr, unsafe.Pointer(&bucket))
+	atomic.StorePointer(&srv.encodeTokenBucketPtr, unsafe.Pointer(&bucket))
 	return
 }
 
-func (srv *DefaultComponentAccessTokenServer) removeLastToken(lastToken string) {
-	srv.tokenBucketPtrMutex.Lock()
-	defer srv.tokenBucketPtrMutex.Unlock()
+func (srv *DefaultComponentAccessTokenServer) removeLastEncodeToken(lastToken string) {
+	srv.encodeTokenBucketPtrMutex.Lock()
+	defer srv.encodeTokenBucketPtrMutex.Unlock()
 
-	currentToken2, lastToken2 := srv.getToken()
-	if lastToken != lastToken2 {
+	currentTicket2, lastTicket2 := srv.getEncodeToken()
+	if lastToken != lastTicket2 {
 		return
 	}
 
 	bucket := tokenBucket{
-		currentToken: currentToken2,
+		currentToken: currentTicket2,
 	}
-	atomic.StorePointer(&srv.tokenBucketPtr, unsafe.Pointer(&bucket))
+	atomic.StorePointer(&srv.encodeTokenBucketPtr, unsafe.Pointer(&bucket))
+	return
+}
+
+func (srv *DefaultComponentAccessTokenServer) getToken() (currentToken string) {
+	if p := (*accessToken)(atomic.LoadPointer(&srv.tokenCache)); p != nil {
+		return p.Token
+	}
 	return
 }
 
@@ -259,7 +272,7 @@ func (srv *DefaultComponentAccessTokenServer) removeLastAESKey(lastAESKey []byte
 	return
 }
 
-func (srv *DefaultComponentAccessTokenServer) HandleAuthEventMsg(r *http.Request, query url.Values) (err error) {
+func (srv *DefaultComponentAccessTokenServer) HandleAuthEventMsg(r *http.Request, query url.Values) (msg []byte, mixedMsg core.MixedServiceProviderMsg, err error) {
 	callback.DebugPrintRequest(r)
 	if query == nil {
 		query = r.URL.Query()
@@ -292,7 +305,7 @@ func (srv *DefaultComponentAccessTokenServer) HandleAuthEventMsg(r *http.Request
 			}
 
 			var token string
-			currentToken, lastToken := srv.getToken()
+			currentToken, lastToken := srv.getEncodeToken()
 			if currentToken == "" {
 				err = errors.New("token was not set for Server, see NewServer function or Server.SetToken method")
 				return
@@ -312,7 +325,7 @@ func (srv *DefaultComponentAccessTokenServer) HandleAuthEventMsg(r *http.Request
 				}
 			} else {
 				if lastToken != "" {
-					srv.removeLastToken(lastToken)
+					srv.removeLastEncodeToken(lastToken)
 				}
 			}
 
@@ -339,7 +352,8 @@ func (srv *DefaultComponentAccessTokenServer) HandleAuthEventMsg(r *http.Request
 			}
 
 			encryptedMsg := make([]byte, base64.StdEncoding.DecodedLen(len(requestHttpBody.Base64EncryptedMsg)))
-			encryptedMsgLen, err := base64.StdEncoding.Decode(encryptedMsg, requestHttpBody.Base64EncryptedMsg)
+			var encryptedMsgLen int
+			encryptedMsgLen, err = base64.StdEncoding.Decode(encryptedMsg, requestHttpBody.Base64EncryptedMsg)
 			if err != nil {
 				return
 			}
@@ -352,7 +366,11 @@ func (srv *DefaultComponentAccessTokenServer) HandleAuthEventMsg(r *http.Request
 				return
 			}
 			aesKey = currentAESKey
-			_, msgPlaintext, haveAppIdBytes, err := util.AESDecryptMsg(encryptedMsg, aesKey)
+			var (
+				msgPlaintext   []byte
+				haveAppIdBytes []byte
+			)
+			_, msgPlaintext, haveAppIdBytes, err = util.AESDecryptMsg(encryptedMsg, aesKey)
 			if err != nil {
 				if lastAESKey == nil {
 					return
@@ -375,8 +393,7 @@ func (srv *DefaultComponentAccessTokenServer) HandleAuthEventMsg(r *http.Request
 				err = fmt.Errorf("the message AppId mismatch, have: %s, want: %s", haveAppId, wantAppId)
 				return
 			}
-
-			var mixedMsg core.MixedServiceProviderMsg
+			mixedMsg = core.MixedServiceProviderMsg{}
 			if err = xml.Unmarshal(msgPlaintext, &mixedMsg); err != nil {
 				return
 			}
@@ -410,7 +427,7 @@ func (srv *DefaultComponentAccessTokenServer) HandleAuthEventMsg(r *http.Request
 			}
 
 			var token string
-			currentToken, lastToken := srv.getToken()
+			currentToken, lastToken := srv.getEncodeToken()
 			if currentToken == "" {
 				err = errors.New("token was not set for Server, see NewServer function or Server.SetToken method")
 				return
@@ -430,17 +447,16 @@ func (srv *DefaultComponentAccessTokenServer) HandleAuthEventMsg(r *http.Request
 				}
 			} else {
 				if lastToken != "" {
-					srv.removeLastToken(lastToken)
+					srv.removeLastEncodeToken(lastToken)
 				}
 			}
-
-			msgPlaintext, err := ioutil.ReadAll(r.Body)
+			var msgPlaintext []byte
+			msgPlaintext, err = ioutil.ReadAll(r.Body)
 			if err != nil {
 				return
 			}
 			callback.DebugPrintPlainRequestMessage(msgPlaintext)
-
-			var mixedMsg core.MixedMsg
+			mixedMsg = core.MixedServiceProviderMsg{}
 			if err = xml.Unmarshal(msgPlaintext, &mixedMsg); err != nil {
 				return
 			}
@@ -471,7 +487,7 @@ func (srv *DefaultComponentAccessTokenServer) HandleAuthEventMsg(r *http.Request
 		}
 
 		var token string
-		currentToken, lastToken := srv.getToken()
+		currentToken, lastToken := srv.getEncodeToken()
 		if currentToken == "" {
 			err = errors.New("token was not set for Server, see NewServer function or Server.SetToken method")
 			return
@@ -491,7 +507,7 @@ func (srv *DefaultComponentAccessTokenServer) HandleAuthEventMsg(r *http.Request
 			}
 		} else {
 			if lastToken != "" {
-				srv.removeLastToken(lastToken)
+				srv.removeLastEncodeToken(lastToken)
 			}
 		}
 		return
@@ -505,7 +521,37 @@ func (srv *DefaultComponentAccessTokenServer) Token() (token string, err error) 
 	if p := (*accessToken)(atomic.LoadPointer(&srv.tokenCache)); p != nil {
 		return p.Token, nil
 	}
-	return srv.RefreshToken("")
+	if srv.enableRefreshToken {
+		return srv.RefreshToken("")
+	}
+	return
+}
+
+func (srv *DefaultComponentAccessTokenServer) SetToken(token string, options ...interface{}) (err error) {
+	if token == "" {
+		return errors.New("empty access token")
+	}
+	srv.tokenCachePtrMutex.Lock()
+	defer srv.tokenCachePtrMutex.Unlock()
+
+	currentToken, _ := srv.Token()
+	if token == currentToken {
+		return
+	}
+	var expiredIn int64 = 7200
+	if len(options) >= 1 {
+		if val, ok := options[0].(int64); ok {
+			if val > 0 {
+				expiredIn = val
+			}
+		}
+	}
+	bucket := accessToken{
+		Token:     token,
+		ExpiresIn: expiredIn,
+	}
+	atomic.StorePointer(&srv.tokenCache, unsafe.Pointer(&bucket))
+	return
 }
 
 func (srv *DefaultComponentAccessTokenServer) Ticket() (ticket string, err error) {
@@ -518,14 +564,17 @@ func (srv *DefaultComponentAccessTokenServer) Ticket() (ticket string, err error
 // https://developers.weixin.qq.com/doc/oplatform/Third-party_Platforms/api/pre_auth_code.html
 func (srv *DefaultComponentAccessTokenServer) PreAuthCode() (code string, err error) {
 	token, err := srv.Token()
+	logs.Info("err--httpPostJSON--->%s", token)
+	logs.Info("err--httpPostJSON--->%v", err)
 	if err != nil {
 		return
 	}
-	urlStr := "https://api.weixin.qq.com/cgi-bin/component/api_create_preauthcode?component_access_token=" + token
+	urlStr := "https://api.weixin.qq.com/cgi-bin/component/api_create_preauthcode?component_access_token=" + url.QueryEscape(token)
 	vals := make(map[string]string, 0)
 	vals["component_access_token"] = token
 	vals["component_appid"] = srv.appId
-	valsBytArr, err := json.Marshal(vals)
+	valByteArr, err := json.Marshal(vals)
+	logs.Info("valByteArr----->%s", string(valByteArr))
 	if err != nil {
 		return
 	}
@@ -535,7 +584,8 @@ func (srv *DefaultComponentAccessTokenServer) PreAuthCode() (code string, err er
 		PreAuthCode string `json:"pre_auth_code,omitempty"`
 		ExpiresIn   int    `json:"expires_in,omitempty"`
 	}
-	err = httpPostJSON(srv.httpClient, urlStr, valsBytArr, &result)
+	err = httpPostJSON(srv.httpClient, urlStr, valByteArr, &result)
+	logs.Info("err--httpPostJSON--->%v", err)
 	if err != nil {
 		return
 	}
