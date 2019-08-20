@@ -203,13 +203,13 @@ func (srv *DefaultComponentAccessTokenServer) removeLastEncodeToken(lastToken st
 	srv.encodeTokenBucketPtrMutex.Lock()
 	defer srv.encodeTokenBucketPtrMutex.Unlock()
 
-	currentTicket2, lastTicket2 := srv.getEncodeToken()
-	if lastToken != lastTicket2 {
+	currentToken2, lastToken2 := srv.getEncodeToken()
+	if lastToken != lastToken2 {
 		return
 	}
 
 	bucket := tokenBucket{
-		currentToken: currentTicket2,
+		currentToken: currentToken2,
 	}
 	atomic.StorePointer(&srv.encodeTokenBucketPtr, unsafe.Pointer(&bucket))
 	return
