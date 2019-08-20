@@ -89,8 +89,8 @@ RETRY:
 
 // 生成第三方服务商授权链接
 // 授权流程完成后，授权页会自动跳转进入回调 URI，并在 URL 参数中返回授权码和过期时间(redirect_url?auth_code=xxx&expires_in=600)
-func (clt *Client) GetAuthUrlForWeb(redirectUri, bizAppId string, authType AuthType) (authUrl string, err error) {
-	if len(redirectUri) == 0 {
+func (clt *Client) GetAuthUrlForWeb(redirectUrl, bizAppId string, authType AuthType) (authUrl string, err error) {
+	if len(redirectUrl) == 0 {
 		err = errors.New("missing redirectUri")
 		return
 	}
@@ -98,31 +98,40 @@ func (clt *Client) GetAuthUrlForWeb(redirectUri, bizAppId string, authType AuthT
 	if err != nil {
 		return
 	}
-	redirectUri, err = url.QueryUnescape(redirectUri)
+	redirectUri, err := url.Parse(redirectUrl)
 	if err != nil {
 		return
 	}
-	redirectUri = url.QueryEscape(redirectUri)
+	queryStr := ""
+	fragmentStr := ""
+	if len(redirectUri.Fragment) > 0 {
+		fragmentStr = fmt.Sprintf("#%s", redirectUri.Fragment)
+	}
+	if len(redirectUri.Query()) > 0 {
+		queryStr = fmt.Sprintf("?%s%s", redirectUri.Query().Encode(), fragmentStr)
+	} else {
+		queryStr = fragmentStr
+	}
+	redirectUrl = fmt.Sprintf("%s://%s%s%s", redirectUri.Scheme, redirectUri.Host, redirectUri.Path, queryStr)
 	//https://mp.weixin.qq.com/cgi-bin/componentloginpage?component_appid=xxxx&pre_auth_code=xxxxx&redirect_uri=xxxx&auth_type=xxx
 	incompleteURL := "https://mp.weixin.qq.com/cgi-bin/componentloginpage?"
 	vals := url.Values{}
 	vals.Add("component_appid", clt.AccessTokenServer.appId)
 	vals.Add("pre_auth_code", preAuthCode)
-	vals.Add("redirect_uri", redirectUri)
 	if authType != AuthTypeNil {
 		vals.Add("auth_type", fmt.Sprintf("%d", authType))
 	}
 	if len(bizAppId) > 0 {
 		vals.Add("biz_appid", bizAppId)
 	}
-	authUrl = incompleteURL + vals.Encode()
+	authUrl = incompleteURL + vals.Encode() + "&redirect_uri=" + redirectUrl
 	return
 }
 
 // 点击移动端链接快速授权 第三方平台方可以生成授权链接，将链接通过移动端直接发给授权管理员，管理员确认后即授权成功。
 // 授权流程完成后，授权页会自动跳转进入回调 URI，并在 URL 参数中返回授权码和过期时间(redirect_url?auth_code=xxx&expires_in=600)
-func (clt *Client) GetAuthUrlForMobile(redirectUri, bizAppId string, authType AuthType) (authUrl string, err error) {
-	if len(redirectUri) == 0 {
+func (clt *Client) GetAuthUrlForMobile(redirectUrl, bizAppId string, authType AuthType) (authUrl string, err error) {
+	if len(redirectUrl) == 0 {
 		err = errors.New("missing redirectUri")
 		return
 	}
@@ -134,23 +143,33 @@ func (clt *Client) GetAuthUrlForMobile(redirectUri, bizAppId string, authType Au
 	if err != nil {
 		return
 	}
-	redirectUri, err = url.QueryUnescape(redirectUri)
+	redirectUri, err := url.Parse(redirectUrl)
 	if err != nil {
 		return
 	}
-	redirectUri = url.QueryEscape(redirectUri)
+	queryStr := ""
+	fragmentStr := ""
+	if len(redirectUri.Fragment) > 0 {
+		fragmentStr = fmt.Sprintf("#%s", redirectUri.Fragment)
+	}
+	if len(redirectUri.Query()) > 0 {
+		queryStr = fmt.Sprintf("?%s%s", redirectUri.Query().Encode(), fragmentStr)
+	} else {
+		queryStr = fragmentStr
+	}
+	redirectUrl = fmt.Sprintf("%s://%s%s%s", redirectUri.Scheme, redirectUri.Host, redirectUri.Path, queryStr)
+
 	//https://mp.weixin.qq.com/safe/bindcomponent?action=bindcomponent&auth_type=3&no_scan=1&component_appid=xxxx&pre_auth_code=xxxxx&redirect_uri=xxxx&auth_type=xxx&biz_appid=xxxx#wechat_redirect
 	incompleteURL := "https://mp.weixin.qq.com/safe/bindcomponent?"
 	vals := url.Values{}
 	vals.Add("action", "bindcomponent")
 	vals.Add("component_appid", clt.AccessTokenServer.appId)
 	vals.Add("pre_auth_code", preAuthCode)
-	vals.Add("redirect_uri", redirectUri)
 	vals.Add("auth_type", fmt.Sprintf("%d", authType))
 	if len(bizAppId) > 0 {
 		vals.Add("biz_appid", bizAppId)
 	}
-	authUrl = incompleteURL + vals.Encode() + "#wechat_redirect"
+	authUrl = incompleteURL + vals.Encode() + "&redirect_uri=" + redirectUrl + "#wechat_redirect"
 	return
 }
 
