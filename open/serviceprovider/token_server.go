@@ -564,8 +564,8 @@ func (srv *DefaultComponentAccessTokenServer) Ticket() (ticket string, err error
 // https://developers.weixin.qq.com/doc/oplatform/Third-party_Platforms/api/pre_auth_code.html
 func (srv *DefaultComponentAccessTokenServer) PreAuthCode() (code string, err error) {
 	token, err := srv.Token()
-	logs.Info("err--httpPostJSON--->%s", token)
-	logs.Info("err--httpPostJSON--->%v", err)
+	// logs.Info("err--httpPostJSON--->%s", token)
+	// logs.Info("err--httpPostJSON--->%v", err)
 	if err != nil {
 		return
 	}
@@ -574,7 +574,7 @@ func (srv *DefaultComponentAccessTokenServer) PreAuthCode() (code string, err er
 	vals["component_access_token"] = token
 	vals["component_appid"] = srv.appId
 	valByteArr, err := json.Marshal(vals)
-	logs.Info("valByteArr----->%s", string(valByteArr))
+	// logs.Info("valByteArr----->%s", string(valByteArr))
 	if err != nil {
 		return
 	}
@@ -585,7 +585,7 @@ func (srv *DefaultComponentAccessTokenServer) PreAuthCode() (code string, err er
 		ExpiresIn   int    `json:"expires_in,omitempty"`
 	}
 	err = httpPostJSON(srv.httpClient, urlStr, valByteArr, &result)
-	logs.Info("err--httpPostJSON--->%v", err)
+	// logs.Info("err--httpPostJSON--->%v", err)
 	if err != nil {
 		return
 	}
