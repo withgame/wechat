@@ -362,3 +362,223 @@ func (clt *Client) CodeSubmit(authorizerAccessToken, incompleteURL, templateId, 
 		return
 	}
 }
+
+
+// 小程序登录
+// https://developers.weixin.qq.com/doc/oplatform/Third-party_Platforms/Mini_Programs/WeChat_login.html
+func (clt *Client) WxLogin(bizAppId, jsCode, incompleteURL string, response interface{}) (err error) {
+	if len(incompleteURL) == 0 {
+		incompleteURL = "https://api.weixin.qq.com/sns/component/jscode2session"
+	}
+	httpClient := clt.HttpClient
+	if httpClient == nil {
+		httpClient = util.DefaultHttpClient
+	}
+	ErrorStructValue, ErrorErrCodeValue := checkResponse(response)
+	token, err := clt.Token()
+	if err != nil {
+		return
+	}
+	vals := url.Values{}
+	vals.Add("appid", bizAppId)
+	vals.Add("js_code", jsCode)
+	vals.Add("grant_type", "authorization_code")
+	vals.Add("component_appid", clt.AccessTokenServer.appId)
+	vals.Add("component_access_token", token)
+	finalURL := incompleteURL + "?" + vals.Encode()
+	if err = httpGetJSON(httpClient, finalURL, response); err != nil {
+		return
+	}
+	switch errCode := ErrorErrCodeValue.Int(); errCode {
+	case ErrCodeOK:
+		return
+	case ErrCodeInvalidCredential, ErrCodeAccessTokenExpired:
+		err = errors.New(ErrorStructValue.Field(errorErrMsgIndex).String())
+		return
+	default:
+		return
+	}
+}
+
+// 获取模板标题列表
+// https://developers.weixin.qq.com/doc/oplatform/Third-party_Platforms/Mini_Programs/message_template/library_list.html
+func (clt *Client) GetMsgTplList(offset, limit int, incompleteURL string, response interface{}) (err error) {
+	if len(incompleteURL) == 0 {
+		incompleteURL = "https://api.weixin.qq.com/cgi-bin/wxopen/template/library/list?access_token="
+	}
+	httpClient := clt.HttpClient
+	if httpClient == nil {
+		httpClient = util.DefaultHttpClient
+	}
+	ErrorStructValue, ErrorErrCodeValue := checkResponse(response)
+	token, err := clt.Token()
+	if err != nil {
+		return
+	}
+	vals := make(map[string]interface{}, 0)
+	vals["offset"] = offset
+	vals["count"] = limit
+	valByte, err := json.Marshal(vals)
+	if err != nil {
+		return
+	}
+	finalURL := incompleteURL + token
+	if err = httpPostJSON(httpClient, finalURL, valByte, response); err != nil {
+		return
+	}
+	switch errCode := ErrorErrCodeValue.Int(); errCode {
+	case ErrCodeOK:
+		return
+	case ErrCodeInvalidCredential, ErrCodeAccessTokenExpired:
+		err = errors.New(ErrorStructValue.Field(errorErrMsgIndex).String())
+		return
+	default:
+		return
+	}
+}
+
+// 获取模板标题下的关键词库
+// https://developers.weixin.qq.com/doc/oplatform/Third-party_Platforms/Mini_Programs/message_template/library_get.html
+func (clt *Client) GetMsgTplKeywords(tplId, incompleteURL string, response interface{}) (err error) {
+	if len(incompleteURL) == 0 {
+		incompleteURL = "https://api.weixin.qq.com/cgi-bin/wxopen/template/library/list?access_token="
+	}
+	httpClient := clt.HttpClient
+	if httpClient == nil {
+		httpClient = util.DefaultHttpClient
+	}
+	ErrorStructValue, ErrorErrCodeValue := checkResponse(response)
+	token, err := clt.Token()
+	if err != nil {
+		return
+	}
+	vals := make(map[string]interface{}, 0)
+	vals["id"] = tplId
+	valByte, err := json.Marshal(vals)
+	if err != nil {
+		return
+	}
+	finalURL := incompleteURL + token
+	if err = httpPostJSON(httpClient, finalURL, valByte, response); err != nil {
+		return
+	}
+	switch errCode := ErrorErrCodeValue.Int(); errCode {
+	case ErrCodeOK:
+		return
+	case ErrCodeInvalidCredential, ErrCodeAccessTokenExpired:
+		err = errors.New(ErrorStructValue.Field(errorErrMsgIndex).String())
+		return
+	default:
+		return
+	}
+}
+
+// 组合模板并添加到个人模板库
+// https://developers.weixin.qq.com/doc/oplatform/Third-party_Platforms/Mini_Programs/message_template/add_template.html
+func (clt *Client) AddMsgTplIntoAccount(tplId string, keywordIds []int, incompleteURL string, response interface{}) (err error) {
+	if len(incompleteURL) == 0 {
+		incompleteURL = "https://api.weixin.qq.com/cgi-bin/wxopen/template/add?access_token="
+	}
+	httpClient := clt.HttpClient
+	if httpClient == nil {
+		httpClient = util.DefaultHttpClient
+	}
+	ErrorStructValue, ErrorErrCodeValue := checkResponse(response)
+	token, err := clt.Token()
+	if err != nil {
+		return
+	}
+	vals := make(map[string]interface{}, 0)
+	vals["id"] = tplId
+	vals["keyword_id_list"] = keywordIds
+	valByte, err := json.Marshal(vals)
+	if err != nil {
+		return
+	}
+	finalURL := incompleteURL + token
+	if err = httpPostJSON(httpClient, finalURL, valByte, response); err != nil {
+		return
+	}
+	switch errCode := ErrorErrCodeValue.Int(); errCode {
+	case ErrCodeOK:
+		return
+	case ErrCodeInvalidCredential, ErrCodeAccessTokenExpired:
+		err = errors.New(ErrorStructValue.Field(errorErrMsgIndex).String())
+		return
+	default:
+		return
+	}
+}
+
+// 获取帐号下的模板列表
+// https://developers.weixin.qq.com/doc/oplatform/Third-party_Platforms/Mini_Programs/message_template/list_template.html
+func (clt *Client) GetAccountMsgTpls(offset, limit int, incompleteURL string, response interface{}) (err error) {
+	if len(incompleteURL) == 0 {
+		incompleteURL = "https://api.weixin.qq.com/cgi-bin/wxopen/template/list?access_token="
+	}
+	httpClient := clt.HttpClient
+	if httpClient == nil {
+		httpClient = util.DefaultHttpClient
+	}
+	ErrorStructValue, ErrorErrCodeValue := checkResponse(response)
+	token, err := clt.Token()
+	if err != nil {
+		return
+	}
+	vals := make(map[string]interface{}, 0)
+	vals["offset"] = offset
+	vals["count"] = limit
+	valByte, err := json.Marshal(vals)
+	if err != nil {
+		return
+	}
+	finalURL := incompleteURL + token
+	if err = httpPostJSON(httpClient, finalURL, valByte, response); err != nil {
+		return
+	}
+	switch errCode := ErrorErrCodeValue.Int(); errCode {
+	case ErrCodeOK:
+		return
+	case ErrCodeInvalidCredential, ErrCodeAccessTokenExpired:
+		err = errors.New(ErrorStructValue.Field(errorErrMsgIndex).String())
+		return
+	default:
+		return
+	}
+}
+
+// 删除帐号下的某个模板
+// https://developers.weixin.qq.com/doc/oplatform/Third-party_Platforms/Mini_Programs/message_template/list_template.html
+func (clt *Client) DelAccountMsgTpl(tplId string, incompleteURL string, response interface{}) (err error) {
+	if len(incompleteURL) == 0 {
+		incompleteURL = "https://api.weixin.qq.com/cgi-bin/wxopen/template/del?access_token="
+	}
+	httpClient := clt.HttpClient
+	if httpClient == nil {
+		httpClient = util.DefaultHttpClient
+	}
+	ErrorStructValue, ErrorErrCodeValue := checkResponse(response)
+	token, err := clt.Token()
+	if err != nil {
+		return
+	}
+	vals := make(map[string]interface{}, 0)
+	vals["template_id"] = tplId
+	valByte, err := json.Marshal(vals)
+	if err != nil {
+		return
+	}
+	finalURL := incompleteURL + token
+	if err = httpPostJSON(httpClient, finalURL, valByte, response); err != nil {
+		return
+	}
+	switch errCode := ErrorErrCodeValue.Int(); errCode {
+	case ErrCodeOK:
+		return
+	case ErrCodeInvalidCredential, ErrCodeAccessTokenExpired:
+		err = errors.New(ErrorStructValue.Field(errorErrMsgIndex).String())
+		return
+	default:
+		return
+	}
+}
