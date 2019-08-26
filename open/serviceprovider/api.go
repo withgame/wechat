@@ -192,7 +192,7 @@ func (clt *Client) GetAuthorizerAccessToken(AuthorizationCode, incompleteURL str
 	}
 
 	vals := make(map[string]string, 0)
-	vals["component_access_token"] = token
+	//vals["component_access_token"] = token
 	vals["component_appid"] = clt.AccessTokenServer.appId
 	vals["authorization_code"] = AuthorizationCode
 	valByte, err := json.Marshal(vals)
@@ -245,7 +245,7 @@ func (clt *Client) RefreshAuthorizerAccessToken(bizAppId, authorizerRefreshToken
 	}
 
 	vals := make(map[string]string, 0)
-	vals["component_access_token"] = token
+	//vals["component_access_token"] = token
 	vals["component_appid"] = clt.AccessTokenServer.appId
 	vals["authorizer_appid"] = bizAppId
 	vals["authorizer_refresh_token"] = authorizerRefreshToken

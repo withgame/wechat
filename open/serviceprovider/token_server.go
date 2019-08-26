@@ -73,13 +73,14 @@ type DefaultComponentAccessTokenServer struct {
 
 // NewDefaultComponentAccessTokenServer 创建一个新的 DefaultComponentAccessTokenServer, 如果 httpClient == nil 则默认使用 util.DefaultHttpClient.
 
+//https://open.weixin.qq.com
 //https://developers.weixin.qq.com/doc/oplatform/Third-party_Platforms/api/component_access_token.html
 
 // NewServer 创建一个新的 Server.
 //  componentAppId:		必须; 平台型服务商的componentAppAppId;
 //  componentAppSecret: 必须; 平台型服务商的componentAppSecret;
 //  encodeToken:        必须; 平台型服务商的用于验证签名的encodeToken;
-//  base64AESKey: 		可选; aes加密解密key, 43字节长(base64编码, 去掉了尾部的'='), 安全模式必须设置;
+//  base64AESKey: 		必须; aes加密解密key, 43字节长(base64编码, 去掉了尾部的'='), 安全模式必须设置;
 //  httpClient:      	可选; http request client;
 //  options				可选; options[0]:true enable,false disabled tokenUpdateDaemon
 
@@ -215,6 +216,7 @@ func (srv *DefaultComponentAccessTokenServer) removeLastEncodeToken(lastToken st
 	return
 }
 
+//https://developers.weixin.qq.com/doc/oplatform/Third-party_Platforms/api/component_access_token.html
 func (srv *DefaultComponentAccessTokenServer) getToken() (currentToken string) {
 	if p := (*accessToken)(atomic.LoadPointer(&srv.tokenCache)); p != nil {
 		return p.Token
@@ -272,7 +274,7 @@ func (srv *DefaultComponentAccessTokenServer) removeLastAESKey(lastAESKey []byte
 	return
 }
 
-func (srv *DefaultComponentAccessTokenServer) HandleAuthEventMsg(r *http.Request, query url.Values) (msg []byte, mixedMsg core.MixedServiceProviderMsg, err error) {
+func (srv *DefaultComponentAccessTokenServer) HandleAuthEventMsg(r *http.Request, query url.Values) (msgPlaintext []byte, mixedMsg core.MixedServiceProviderMsg, err error) {
 	callback.DebugPrintRequest(r)
 	if query == nil {
 		query = r.URL.Query()
@@ -367,7 +369,6 @@ func (srv *DefaultComponentAccessTokenServer) HandleAuthEventMsg(r *http.Request
 			}
 			aesKey = currentAESKey
 			var (
-				msgPlaintext   []byte
 				haveAppIdBytes []byte
 			)
 			_, msgPlaintext, haveAppIdBytes, err = util.AESDecryptMsg(encryptedMsg, aesKey)
@@ -450,7 +451,6 @@ func (srv *DefaultComponentAccessTokenServer) HandleAuthEventMsg(r *http.Request
 					srv.removeLastEncodeToken(lastToken)
 				}
 			}
-			var msgPlaintext []byte
 			msgPlaintext, err = ioutil.ReadAll(r.Body)
 			if err != nil {
 				return
