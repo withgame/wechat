@@ -1,20 +1,16 @@
-/*
- * Copyright (c) 2019. 深圳青木文化传播有限公司.
- */
-
 package serviceprovider
 
 import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/chanxuehong/wechat.v2/internal/debug/api"
-	"github.com/chanxuehong/wechat.v2/internal/debug/api/retry"
 	"io/ioutil"
 	"net/http"
 	"net/url"
 	"reflect"
 
+	"github.com/chanxuehong/wechat.v2/internal/debug/api"
+	"github.com/chanxuehong/wechat.v2/internal/debug/api/retry"
 	"gopkg.in/chanxuehong/wechat.v2/util"
 )
 

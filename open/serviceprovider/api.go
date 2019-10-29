@@ -1,16 +1,13 @@
-/*
- * Copyright (c) 2019. 深圳青木文化传播有限公司.
- */
-
 package serviceprovider
 
 import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
+
 	"github.com/chanxuehong/wechat/internal/debug/api/retry"
 	"github.com/chanxuehong/wechat/util"
-	"net/url"
 )
 
 type (

@@ -1,7 +1,3 @@
-/*
- * Copyright (c) 2019. 深圳青木文化传播有限公司.
- */
-
 package serviceprovider
 
 import (
