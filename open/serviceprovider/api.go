@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) 2019. 深圳青木文化传播有限公司.
+ */
+
 package serviceprovider
 
 import (
@@ -84,20 +88,48 @@ RETRY:
 	default:
 		return
 	}
-	return
+}
+
+// 获取授权方的帐号基本信息,GetAuthorizerAccessToken 返回 authorizerAccessToken
+// https://developers.weixin.qq.com/doc/oplatform/Third-party_Platforms/Mini_Programs/Mini_Program_Information_Settings.html
+func (clt *Client) GetAccountBasicInfo(authorizerAccessToken, incompleteURL string, response interface{}) (err error) {
+	if len(incompleteURL) == 0 {
+		incompleteURL = "https://api.weixin.qq.com/cgi-bin/account/getaccountbasicinfo?access_token="
+	}
+	httpClient := clt.HttpClient
+	if httpClient == nil {
+		httpClient = util.DefaultHttpClient
+	}
+	ErrorStructValue, ErrorErrCodeValue := checkResponse(response)
+	finalURL := incompleteURL + authorizerAccessToken
+	if err = httpGetJSON(httpClient, finalURL, response); err != nil {
+		return
+	}
+	switch errCode := ErrorErrCodeValue.Int(); errCode {
+	case ErrCodeOK:
+		return
+	case ErrCodeInvalidCredential, ErrCodeAccessTokenExpired:
+		err = errors.New(ErrorStructValue.Field(errorErrMsgIndex).String())
+		return
+	default:
+		return
+	}
 }
 
 // 生成第三方服务商授权链接
 // 授权流程完成后，授权页会自动跳转进入回调 URI，并在 URL 参数中返回授权码和过期时间(redirect_url?auth_code=xxx&expires_in=600)
 func (clt *Client) GetAuthUrlForWeb(redirectUrl, bizAppId string, authType AuthType) (authUrl string, err error) {
 	if len(redirectUrl) == 0 {
-		err = errors.New("missing redirectUri")
+		err = errors.New("missing redirectUrl")
 		return
 	}
+	//token, err := clt.Token()
+	//ticket, err := clt.AccessTokenServer.Ticket()
 	preAuthCode, err := clt.AccessTokenServer.PreAuthCode()
 	if err != nil {
 		return
 	}
+	//redirectUri, err := url.Parse(redirectUrl)
 	redirectUri, err := url.Parse(redirectUrl)
 	if err != nil {
 		return
@@ -113,11 +145,18 @@ func (clt *Client) GetAuthUrlForWeb(redirectUrl, bizAppId string, authType AuthT
 		queryStr = fragmentStr
 	}
 	redirectUrl = fmt.Sprintf("%s://%s%s%s", redirectUri.Scheme, redirectUri.Host, redirectUri.Path, queryStr)
+
+	//redirectUri, err = url.QueryUnescape(redirectUri)
+	//if err != nil {
+	//	return
+	//}
+	//redirectUri = url.QueryEscape(redirectUri)
 	//https://mp.weixin.qq.com/cgi-bin/componentloginpage?component_appid=xxxx&pre_auth_code=xxxxx&redirect_uri=xxxx&auth_type=xxx
 	incompleteURL := "https://mp.weixin.qq.com/cgi-bin/componentloginpage?"
 	vals := url.Values{}
 	vals.Add("component_appid", clt.AccessTokenServer.appId)
 	vals.Add("pre_auth_code", preAuthCode)
+	//vals.Add("redirect_uri", redirectUrl)
 	if authType != AuthTypeNil {
 		vals.Add("auth_type", fmt.Sprintf("%d", authType))
 	}
@@ -143,6 +182,12 @@ func (clt *Client) GetAuthUrlForMobile(redirectUrl, bizAppId string, authType Au
 	if err != nil {
 		return
 	}
+	//redirectUri, err = url.QueryUnescape(redirectUri)
+	//if err != nil {
+	//	return
+	//}
+	//redirectUri = url.QueryEscape(redirectUri)
+
 	redirectUri, err := url.Parse(redirectUrl)
 	if err != nil {
 		return
@@ -158,13 +203,13 @@ func (clt *Client) GetAuthUrlForMobile(redirectUrl, bizAppId string, authType Au
 		queryStr = fragmentStr
 	}
 	redirectUrl = fmt.Sprintf("%s://%s%s%s", redirectUri.Scheme, redirectUri.Host, redirectUri.Path, queryStr)
-
 	//https://mp.weixin.qq.com/safe/bindcomponent?action=bindcomponent&auth_type=3&no_scan=1&component_appid=xxxx&pre_auth_code=xxxxx&redirect_uri=xxxx&auth_type=xxx&biz_appid=xxxx#wechat_redirect
 	incompleteURL := "https://mp.weixin.qq.com/safe/bindcomponent?"
 	vals := url.Values{}
 	vals.Add("action", "bindcomponent")
 	vals.Add("component_appid", clt.AccessTokenServer.appId)
 	vals.Add("pre_auth_code", preAuthCode)
+	//vals.Add("redirect_uri", redirectUrl)
 	vals.Add("auth_type", fmt.Sprintf("%d", authType))
 	if len(bizAppId) > 0 {
 		vals.Add("biz_appid", bizAppId)
@@ -283,87 +328,6 @@ RETRY:
 	}
 }
 
-// 设置服务器域名
-// https://developers.weixin.qq.com/doc/oplatform/Third-party_Platforms/Mini_Programs/Server_Address_Configuration.html
-func (clt *Client) ModifyDomain(authorizerAccessToken, incompleteURL string, action ActionType, domains map[string][]string, response interface{}) (err error) {
-	if len(incompleteURL) == 0 {
-		incompleteURL = "https://api.weixin.qq.com/wxa/modify_domain?access_token="
-	}
-	if len(domains["req"]) == 0 || len(domains["ws"]) == 0 || len(domains["upload"]) == 0 || len(domains["download"]) == 0 {
-		err = errors.New("missing required params")
-		return
-	}
-	ErrorStructValue, ErrorErrCodeValue := checkResponse(response)
-	httpClient := clt.HttpClient
-	if httpClient == nil {
-		httpClient = util.DefaultHttpClient
-	}
-	vals := make(map[string]interface{}, 0)
-	vals["action"] = string(action)
-	vals["requestdomain"] = domains["req"]
-	vals["wsrequestdomain"] = domains["ws"]
-	vals["uploaddomain"] = domains["upload"]
-	vals["downloaddomain"] = domains["download"]
-	valByte, err := json.Marshal(vals)
-	if err != nil {
-		return
-	}
-	finalURL := incompleteURL + url.QueryEscape(authorizerAccessToken)
-	if err = httpPostJSON(httpClient, finalURL, valByte, response); err != nil {
-		return
-	}
-	switch errCode := ErrorErrCodeValue.Int(); errCode {
-	case ErrCodeOK:
-		return
-	case ErrCodeInvalidCredential, ErrCodeAccessTokenExpired:
-		err = errors.New(ErrorStructValue.Field(errorErrMsgIndex).String())
-		return
-	default:
-		return
-	}
-}
-
-// 上传小程序代码
-// https://developers.weixin.qq.com/doc/oplatform/Third-party_Platforms/Mini_Programs/code/commit.html
-func (clt *Client) CodeSubmit(authorizerAccessToken, incompleteURL, templateId, extJson, userVersion, userDesc string) (err error) {
-	if len(incompleteURL) == 0 {
-		incompleteURL = "https://api.weixin.qq.com/wxa/commit?access_token="
-	}
-	if len(authorizerAccessToken) == 0 || len(templateId) == 0 || len(extJson) == 0 || len(userVersion) == 0 || len(userDesc) == 0 {
-		err = errors.New("missing required params")
-		return
-	}
-	var response interface{}
-	ErrorStructValue, ErrorErrCodeValue := checkResponse(response)
-	httpClient := clt.HttpClient
-	if httpClient == nil {
-		httpClient = util.DefaultHttpClient
-	}
-	vals := make(map[string]interface{}, 0)
-	vals["template_id"] = templateId
-	vals["ext_json"] = extJson
-	vals["user_version"] = userVersion
-	vals["user_desc"] = userDesc
-	valByte, err := json.Marshal(vals)
-	if err != nil {
-		return
-	}
-	finalURL := incompleteURL + url.QueryEscape(authorizerAccessToken)
-	if err = httpPostJSON(httpClient, finalURL, valByte, response); err != nil {
-		return
-	}
-	switch errCode := ErrorErrCodeValue.Int(); errCode {
-	case ErrCodeOK:
-		return
-	case ErrCodeInvalidCredential, ErrCodeAccessTokenExpired:
-		err = errors.New(ErrorStructValue.Field(errorErrMsgIndex).String())
-		return
-	default:
-		return
-	}
-}
-
-
 // 小程序登录
 // https://developers.weixin.qq.com/doc/oplatform/Third-party_Platforms/Mini_Programs/WeChat_login.html
 func (clt *Client) WxLogin(bizAppId, jsCode, incompleteURL string, response interface{}) (err error) {
@@ -400,7 +364,7 @@ func (clt *Client) WxLogin(bizAppId, jsCode, incompleteURL string, response inte
 	}
 }
 
-// 获取模板标题列表
+// 获取消息模板标题列表
 // https://developers.weixin.qq.com/doc/oplatform/Third-party_Platforms/Mini_Programs/message_template/library_list.html
 func (clt *Client) GetMsgTplList(offset, limit int, incompleteURL string, response interface{}) (err error) {
 	if len(incompleteURL) == 0 {
@@ -437,7 +401,7 @@ func (clt *Client) GetMsgTplList(offset, limit int, incompleteURL string, respon
 	}
 }
 
-// 获取模板标题下的关键词库
+// 获取消息模板标题下的关键词库
 // https://developers.weixin.qq.com/doc/oplatform/Third-party_Platforms/Mini_Programs/message_template/library_get.html
 func (clt *Client) GetMsgTplKeywords(tplId, incompleteURL string, response interface{}) (err error) {
 	if len(incompleteURL) == 0 {
@@ -473,7 +437,7 @@ func (clt *Client) GetMsgTplKeywords(tplId, incompleteURL string, response inter
 	}
 }
 
-// 组合模板并添加到个人模板库
+// 组合消息模板并添加到个人模板库
 // https://developers.weixin.qq.com/doc/oplatform/Third-party_Platforms/Mini_Programs/message_template/add_template.html
 func (clt *Client) AddMsgTplIntoAccount(tplId string, keywordIds []int, incompleteURL string, response interface{}) (err error) {
 	if len(incompleteURL) == 0 {
@@ -510,7 +474,7 @@ func (clt *Client) AddMsgTplIntoAccount(tplId string, keywordIds []int, incomple
 	}
 }
 
-// 获取帐号下的模板列表
+// 获取帐号下的消息模板列表
 // https://developers.weixin.qq.com/doc/oplatform/Third-party_Platforms/Mini_Programs/message_template/list_template.html
 func (clt *Client) GetAccountMsgTpls(offset, limit int, incompleteURL string, response interface{}) (err error) {
 	if len(incompleteURL) == 0 {
@@ -570,6 +534,36 @@ func (clt *Client) DelAccountMsgTpl(tplId string, incompleteURL string, response
 	}
 	finalURL := incompleteURL + token
 	if err = httpPostJSON(httpClient, finalURL, valByte, response); err != nil {
+		return
+	}
+	switch errCode := ErrorErrCodeValue.Int(); errCode {
+	case ErrCodeOK:
+		return
+	case ErrCodeInvalidCredential, ErrCodeAccessTokenExpired:
+		err = errors.New(ErrorStructValue.Field(errorErrMsgIndex).String())
+		return
+	default:
+		return
+	}
+}
+
+// 获取代码模板列表
+// https://developers.weixin.qq.com/doc/oplatform/Third-party_Platforms/Mini_Programs/code_template/gettemplatelist.html
+func (clt *Client) GetTemplateList(incompleteURL string, response interface{}) (err error) {
+	if len(incompleteURL) == 0 {
+		incompleteURL = "https://api.weixin.qq.com/wxa/gettemplatelist?access_token="
+	}
+	httpClient := clt.HttpClient
+	if httpClient == nil {
+		httpClient = util.DefaultHttpClient
+	}
+	ErrorStructValue, ErrorErrCodeValue := checkResponse(response)
+	token, err := clt.Token()
+	if err != nil {
+		return
+	}
+	finalURL := incompleteURL + token
+	if err = httpGetJSON(httpClient, finalURL, response); err != nil {
 		return
 	}
 	switch errCode := ErrorErrCodeValue.Int(); errCode {

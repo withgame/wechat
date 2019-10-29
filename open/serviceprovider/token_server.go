@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) 2019. 深圳青木文化传播有限公司.
+ */
+
 package serviceprovider
 
 import (
@@ -7,12 +11,6 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
-	"github.com/chanxuehong/util/security"
-	"github.com/chanxuehong/wechat/internal/debug/api"
-	"github.com/chanxuehong/wechat/internal/debug/callback"
-	"github.com/chanxuehong/wechat/internal/util"
-	"github.com/chanxuehong/wechat/mp/core"
-	wechatUtil "github.com/chanxuehong/wechat/util"
 	"io/ioutil"
 	"math/rand"
 	"net/http"
@@ -22,6 +20,13 @@ import (
 	"sync/atomic"
 	"time"
 	"unsafe"
+
+	"github.com/chanxuehong/util/security"
+	"github.com/chanxuehong/wechat.v2/internal/debug/api"
+	"github.com/chanxuehong/wechat.v2/internal/debug/callback"
+	"github.com/chanxuehong/wechat.v2/internal/util"
+	"github.com/chanxuehong/wechat.v2/mp/core"
+	wechatUtil "gopkg.in/chanxuehong/wechat.v2/util"
 )
 
 // 检查 AccessTokenServer 的接口实现
@@ -73,14 +78,13 @@ type DefaultComponentAccessTokenServer struct {
 
 // NewDefaultComponentAccessTokenServer 创建一个新的 DefaultComponentAccessTokenServer, 如果 httpClient == nil 则默认使用 util.DefaultHttpClient.
 
-//https://open.weixin.qq.com
 //https://developers.weixin.qq.com/doc/oplatform/Third-party_Platforms/api/component_access_token.html
 
 // NewServer 创建一个新的 Server.
 //  componentAppId:		必须; 平台型服务商的componentAppAppId;
 //  componentAppSecret: 必须; 平台型服务商的componentAppSecret;
 //  encodeToken:        必须; 平台型服务商的用于验证签名的encodeToken;
-//  base64AESKey: 		必须; aes加密解密key, 43字节长(base64编码, 去掉了尾部的'='), 安全模式必须设置;
+//  base64AESKey: 		可选; aes加密解密key, 43字节长(base64编码, 去掉了尾部的'='), 安全模式必须设置;
 //  httpClient:      	可选; http request client;
 //  options				可选; options[0]:true enable,false disabled tokenUpdateDaemon
 
@@ -216,7 +220,6 @@ func (srv *DefaultComponentAccessTokenServer) removeLastEncodeToken(lastToken st
 	return
 }
 
-//https://developers.weixin.qq.com/doc/oplatform/Third-party_Platforms/api/component_access_token.html
 func (srv *DefaultComponentAccessTokenServer) getToken() (currentToken string) {
 	if p := (*accessToken)(atomic.LoadPointer(&srv.tokenCache)); p != nil {
 		return p.Token
@@ -564,8 +567,6 @@ func (srv *DefaultComponentAccessTokenServer) Ticket() (ticket string, err error
 // https://developers.weixin.qq.com/doc/oplatform/Third-party_Platforms/api/pre_auth_code.html
 func (srv *DefaultComponentAccessTokenServer) PreAuthCode() (code string, err error) {
 	token, err := srv.Token()
-	// logs.Info("err--httpPostJSON--->%s", token)
-	// logs.Info("err--httpPostJSON--->%v", err)
 	if err != nil {
 		return
 	}
@@ -574,7 +575,6 @@ func (srv *DefaultComponentAccessTokenServer) PreAuthCode() (code string, err er
 	vals["component_access_token"] = token
 	vals["component_appid"] = srv.appId
 	valByteArr, err := json.Marshal(vals)
-	// logs.Info("valByteArr----->%s", string(valByteArr))
 	if err != nil {
 		return
 	}
@@ -585,7 +585,6 @@ func (srv *DefaultComponentAccessTokenServer) PreAuthCode() (code string, err er
 		ExpiresIn   int    `json:"expires_in,omitempty"`
 	}
 	err = httpPostJSON(srv.httpClient, urlStr, valByteArr, &result)
-	// logs.Info("err--httpPostJSON--->%v", err)
 	if err != nil {
 		return
 	}

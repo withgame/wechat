@@ -1,16 +1,21 @@
+/*
+ * Copyright (c) 2019. 深圳青木文化传播有限公司.
+ */
+
 package serviceprovider
 
 import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/chanxuehong/wechat/internal/debug/api"
-	"github.com/chanxuehong/wechat/internal/debug/api/retry"
+	"github.com/chanxuehong/wechat.v2/internal/debug/api"
+	"github.com/chanxuehong/wechat.v2/internal/debug/api/retry"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 	"reflect"
 
-	"github.com/chanxuehong/wechat/util"
+	"gopkg.in/chanxuehong/wechat.v2/util"
 )
 
 type Client struct {
@@ -107,6 +112,28 @@ func httpGetJSON(clt *http.Client, url string, response interface{}) error {
 	return api.DecodeJSONHttpResponse(httpResp.Body, response)
 }
 
+func httpGet(clt *http.Client, url string, response interface{}) error {
+	api.DebugPrintGetRequest(url)
+	httpResp, err := clt.Get(url)
+	if err != nil {
+		return err
+	}
+	defer httpResp.Body.Close()
+	if httpResp.StatusCode != http.StatusOK {
+		return fmt.Errorf("http.Status: %s", httpResp.Status)
+	}
+	tryDecodeErr := api.DecodeJSONHttpResponse(httpResp.Body, response)
+	if tryDecodeErr == nil {
+		return nil
+	}
+	byteArr, err := ioutil.ReadAll(httpResp.Body)
+	if err != nil {
+		return err
+	}
+	response = byteArr
+	return nil
+}
+
 // PostJSON 用 encoding/json 把 request marshal 为 JSON, HTTP POST 到微信服务器,
 // 然后将微信服务器返回的 JSON 用 encoding/json 解析到 response.
 //
@@ -147,7 +174,7 @@ func (clt *Client) PostJSON(incompleteURL string, request interface{}, response 
 
 	hasRetried := false
 RETRY:
-	finalURL := incompleteURL + url.QueryEscape(token)
+	finalURL := incompleteURL + token
 	if err = httpPostJSON(httpClient, finalURL, requestBodyBytes, response); err != nil {
 		return
 	}
@@ -185,6 +212,10 @@ func httpPostJSON(clt *http.Client, url string, body []byte, response interface{
 	if httpResp.StatusCode != http.StatusOK {
 		return fmt.Errorf("http.Status: %s", httpResp.Status)
 	}
+	bodyBytes, _ := ioutil.ReadAll(httpResp.Body)
+	_ = httpResp.Body.Close()
+	logs.Info("respByt:%s", string(bodyBytes))
+	httpResp.Body = ioutil.NopCloser(bytes.NewBuffer(bodyBytes))
 	return api.DecodeJSONHttpResponse(httpResp.Body, response)
 }
 
