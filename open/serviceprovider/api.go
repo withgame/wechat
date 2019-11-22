@@ -4,10 +4,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/astaxie/beego/logs"
+	"github.com/chanxuehong/wechat/internal/debug/api"
+	"gopkg.in/chanxuehong/wechat.v2/util"
 	"net/url"
-
-	"github.com/chanxuehong/wechat/internal/debug/api/retry"
-	"github.com/chanxuehong/wechat/util"
 )
 
 type (
@@ -116,13 +116,24 @@ func (clt *Client) GetAccountBasicInfo(authorizerAccessToken, incompleteURL stri
 // 生成第三方服务商授权链接
 // 授权流程完成后，授权页会自动跳转进入回调 URI，并在 URL 参数中返回授权码和过期时间(redirect_url?auth_code=xxx&expires_in=600)
 func (clt *Client) GetAuthUrlForWeb(redirectUrl, bizAppId string, authType AuthType) (authUrl string, err error) {
+	logs.Info("redirectUri--->%s", redirectUrl)
+	logs.Info("bizAppId--->%s", bizAppId)
+	logs.Info("authType--->%s", authType)
 	if len(redirectUrl) == 0 {
 		err = errors.New("missing redirectUrl")
 		return
 	}
-	//token, err := clt.Token()
-	//ticket, err := clt.AccessTokenServer.Ticket()
+	logs.Info("token------------------>")
+	token, err := clt.Token()
+	ticket, err := clt.AccessTokenServer.Ticket()
+	logs.Info("token-clt.ticket-->%s", ticket)
+	logs.Info("token-clt.ticket-err->%s", err)
+	logs.Info("token-clt.Token-->%s", token)
+	logs.Info("token-clt.Token-->%s", token)
+	logs.Info("token-clt.Token-err->%v", err)
 	preAuthCode, err := clt.AccessTokenServer.PreAuthCode()
+	logs.Info("preAuthCode--->%v", preAuthCode)
+	logs.Info("preAuthCode-err-->%v", err)
 	if err != nil {
 		return
 	}
